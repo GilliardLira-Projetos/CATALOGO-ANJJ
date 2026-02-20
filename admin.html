@@ -1,192 +1,169 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Admin - LOJA ANJJ</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --green: #16a34a; --bg: #f8fafc; --dark: #1e293b; }
-        body { font-family: 'Poppins', sans-serif; background: var(--bg); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        body { font-family: 'Poppins', sans-serif; background: #f4f4f9; padding: 20px; max-width: 800px; margin: auto; }
+        .card-admin { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input, select, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { cursor: pointer; font-weight: bold; border: none; }
+        .btn-save { background: #16a34a; color: white; }
+        .btn-edit { background: #facc15; color: #000; width: auto; padding: 5px 10px; margin: 0; }
+        .btn-delete { background: #dc2626; color: white; width: auto; padding: 5px 10px; margin-left: 5px; }
         
-        /* LOGIN BOX */
-        .login-container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; }
-        
-        /* ADMIN PANEL (Hidden by default) */
-        #adminPanel { display: none; width: 95%; max-width: 700px; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin: 20px; }
-        
-        h2 { color: var(--dark); margin-bottom: 20px; font-weight: 700; }
-        .form-group { margin-bottom: 15px; text-align: left; }
-        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: #64748b; }
-        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; font-family: 'Poppins'; }
-        
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        
-        button { background: var(--dark); color: white; border: none; padding: 14px; width: 100%; border-radius: 8px; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 10px; }
-        button:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn-save { background: var(--green); margin-top: 20px; }
-        .btn-logout { background: #ef4444; padding: 8px; font-size: 12px; width: auto; margin-top: 30px; }
-
-        #loadingStatus { font-size: 12px; color: var(--green); margin-top: 10px; display: none; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; font-size: 13px; }
+        th, td { border-bottom: 1px solid #eee; padding: 10px; text-align: left; }
+        th { background: #f8fafc; }
+        img { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
+        #area-admin { display: none; }
     </style>
 </head>
 <body>
 
-<div id="loginBox" class="login-container">
-    <div style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">ANJJ ADMIN</div>
-    <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">Aceda para gerir o catálogo</p>
-    <input type="email" id="email" placeholder="E-mail" style="margin-bottom: 10px;">
-    <input type="password" id="password" placeholder="Senha" style="margin-bottom: 20px;">
-    <button onclick="login()">ENTRAR NO SISTEMA</button>
-</div>
+    <div id="area-login" class="card-admin">
+        <h2>🔒 Login Admin</h2>
+        <input type="email" id="login-email" placeholder="E-mail">
+        <input type="password" id="login-senha" placeholder="Senha">
+        <button class="btn-save" onclick="fazerLogin()">Entrar</button>
+    </div>
 
-<div id="adminPanel">
-    <h2>Cadastrar Novo Produto</h2>
-    <form id="productForm">
-        <div class="form-group">
-            <label>Nome da Peça</label>
-            <input type="text" id="Name" placeholder="Ex: Kimono Jiu Jitsu Limited Edition" required>
+    <div id="area-admin">
+        <div class="card-admin">
+            <h2 id="form-title">Cadastrar Novo Produto</h2>
+            <input type="hidden" id="prod-id"> <input type="text" id="nome" placeholder="Nome do Produto">
+            <input type="number" id="preco" placeholder="Preço (Ex: 59.90)" step="0.01">
+            <input type="text" id="categoria" placeholder="Categoria">
+            <input type="text" id="tamanho" placeholder="Tamanho (P, M, G, Único...)">
+            <input type="text" id="cor" placeholder="Cor (Preto, Azul...)">
+            <input type="number" id="estoque" placeholder="Quantidade em Estoque">
+            <input type="text" id="imagem" placeholder="URL da Imagem">
+            <select id="disponibilidade">
+                <option value="show">Visível no Site</option>
+                <option value="hide">Escondido</option>
+            </select>
+            <button id="btn-acao" class="btn-save" onclick="salvarProduto()">Salvar Produto</button>
+            <button id="btn-cancelar" style="display:none;" onclick="cancelarEdicao()">Cancelar Edição</button>
         </div>
 
-        <div class="grid">
-            <div class="form-group">
-                <label>Categoria</label>
-                <input type="text" id="Category" placeholder="Ex: Jiu Jitsu" required>
-            </div>
-            <div class="form-group">
-                <label>Status no Site</label>
-                <select id="Availability">
-                    <option value="show">Visível</option>
-                    <option value="hide">Oculto</option>
-                </select>
-            </div>
+        <div class="card-admin">
+            <h3>Produtos Cadastrados</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Foto</th>
+                        <th>Nome/Tam</th>
+                        <th>Preço</th>
+                        <th>Estoque</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-produtos"></tbody>
+            </table>
         </div>
+        <button onclick="fazerLogout()" style="background:#666; color:white;">Sair</button>
+    </div>
 
-        <div class="grid">
-            <div class="form-group">
-                <label>Preço (Ex: 350,00)</label>
-                <input type="text" id="Price" required>
-            </div>
-            <div class="form-group">
-                <label>Preço Oferta (Opcional)</label>
-                <input type="text" id="DiscountedPrice">
-            </div>
-        </div>
+    <script>
+        const SB_URL = "https://tjvscfmvhbhoirtasgae.supabase.co";
+        const SB_KEY = "sb_publishable_fwcg-rT2Tvtyx5YnAMwBoA_ZL09xdQG";
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
 
-        <div class="grid">
-            <div class="form-group">
-                <label>Tamanho</label>
-                <input type="text" id="VariantName" placeholder="Ex: A1, A2, P, M, G">
-            </div>
-            <div class="form-group">
-                <label>Cor / Tag</label>
-                <input type="text" id="Tag" placeholder="Ex: Azul, Branco, Preto">
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label>Foto do Produto (Upload Automático)</label>
-            <input type="file" id="fileInput" accept="image/*" required>
-            <div id="loadingStatus">A carregar imagem...</div>
-        </div>
-
-        <button type="submit" class="btn-save" id="btnSalvar">PUBLICAR PRODUTO</button>
-    </form>
-
-    <button class="btn-logout" onclick="logout()">SAIR</button>
-</div>
-
-<script>
-    // CONFIGURAÇÃO SUPABASE (AS SUAS CHAVES)
-    const SB_URL = "https://tjvscfmvhbhoirtasgae.supabase.co";
-    const SB_KEY = "sb_publishable_fwcg-rT2Tvtyx5YnAMwBoA_ZL09xdQG";
-    const _supabase = supabase.createClient(SB_URL, SB_KEY);
-
-    // FUNÇÃO LOGIN
-    async function login() {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const { error } = await _supabase.auth.signInWithPassword({ email, password });
-        if (error) alert("Acesso Negado: " + error.message);
-        else window.location.reload();
-    }
-
-    // VERIFICAR SESSÃO
-    async function checkUser() {
-        const { data: { user } } = await _supabase.auth.getUser();
-        if (user) {
-            document.getElementById('loginBox').style.display = 'none';
-            document.getElementById('adminPanel').style.display = 'block';
-            document.body.style.alignItems = 'flex-start';
+        async function fazerLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-senha').value;
+            const { error } = await _supabase.auth.signInWithPassword({ email, password });
+            if (error) alert("Erro: " + error.message);
+            else {
+                document.getElementById('area-login').style.display = 'none';
+                document.getElementById('area-admin').style.display = 'block';
+                listarProdutos();
+            }
         }
-    }
-    checkUser();
 
-    // LOGOUT
-    async function logout() {
-        await _supabase.auth.signOut();
-        window.location.reload();
-    }
+        async function listarProdutos() {
+            const { data, error } = await _supabase.from('produtos').select('*').order('created_at', { ascending: false });
+            if (error) return;
+            const tbody = document.getElementById('lista-produtos');
+            tbody.innerHTML = data.map(p => `
+                <tr>
+                    <td><img src="${p.Thumbnail || p.Image1}"></td>
+                    <td><b>${p.Name}</b><br>${p.Variant_Name} | ${p.Tag}</td>
+                    <td>R$ ${p.Price}</td>
+                    <td>${p.Stock}</td>
+                    <td>
+                        <button class="btn-edit" onclick="prepararEdicao('${p.id}')">✏️</button>
+                        <button class="btn-delete" onclick="deletarProduto('${p.id}')">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
 
-    // CADASTRO COM UPLOAD
-    document.getElementById('productForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('btnSalvar');
-        const fileInput = document.getElementById('fileInput');
-        const status = document.getElementById('loadingStatus');
-        
-        if (fileInput.files.length === 0) return alert("Selecione uma imagem!");
+        async function salvarProduto() {
+            const id = document.getElementById('prod-id').value;
+            const dados = {
+                Name: document.getElementById('nome').value,
+                Price: document.getElementById('preco').value,
+                Category: document.getElementById('categoria').value,
+                Variant_Name: document.getElementById('tamanho').value,
+                Tag: document.getElementById('cor').value,
+                Stock: parseInt(document.getElementById('estoque').value),
+                Thumbnail: document.getElementById('imagem').value,
+                Availability: document.getElementById('disponibilidade').value
+            };
 
-        btn.disabled = true;
-        status.style.display = "block";
-        btn.innerText = "A PROCESSAR...";
+            let res;
+            if (id) {
+                // Se tem ID, ele ATUALIZA (Edit)
+                res = await _supabase.from('produtos').update(dados).eq('id', id);
+            } else {
+                // Se não tem ID, ele CRIA (New)
+                res = await _supabase.from('produtos').insert([dados]);
+            }
 
-        try {
-            const file = fileInput.files[0];
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `${fileName}`;
+            if (res.error) alert("Erro: " + res.error.message);
+            else {
+                alert(id ? "Atualizado!" : "Cadastrado!");
+                cancelarEdicao();
+                listarProdutos();
+            }
+        }
 
-            // 1. Upload para o Storage
-            const { data: uploadData, error: uploadError } = await _supabase.storage
-                .from('fotos-produtos')
-                .upload(filePath, file);
-
-            if (uploadError) throw uploadError;
-
-            // 2. Gerar URL Pública
-            const { data: urlData } = _supabase.storage
-                .from('fotos-produtos')
-                .getPublicUrl(filePath);
+        async function prepararEdicao(id) {
+            const { data } = await _supabase.from('produtos').select('*').eq('id', id).single();
+            document.getElementById('form-title').innerText = "Editando Produto";
+            document.getElementById('prod-id').value = data.id;
+            document.getElementById('nome').value = data.Name;
+            document.getElementById('preco').value = data.Price;
+            document.getElementById('categoria').value = data.Category;
+            document.getElementById('tamanho').value = data.Variant_Name;
+            document.getElementById('cor').value = data.Tag;
+            document.getElementById('estoque').value = data.Stock;
+            document.getElementById('imagem').value = data.Thumbnail;
+            document.getElementById('disponibilidade').value = data.Availability;
             
-            const publicUrl = urlData.publicUrl;
-
-            // 3. Inserir na Tabela
-            const { error: dbError } = await _supabase.from('produtos').insert([{
-                "Name": document.getElementById('Name').value,
-                "Category": document.getElementById('Category').value,
-                "Price": document.getElementById('Price').value,
-                "Discounted Price": document.getElementById('DiscountedPrice').value,
-                "Variant Name": document.getElementById('VariantName').value,
-                "Tag": document.getElementById('Tag').value,
-                "Thumbnail": publicUrl,
-                "Availability": document.getElementById('Availability').value,
-                "Stock": "10"
-            }]);
-
-            if (dbError) throw dbError;
-
-            alert("Produto cadastrado com sucesso!");
-            location.reload();
-
-        } catch (err) {
-            alert("Erro: " + err.message);
-            btn.disabled = false;
-            btn.innerText = "PUBLICAR PRODUTO";
-            status.style.display = "none";
+            document.getElementById('btn-acao').innerText = "Salvar Alterações";
+            document.getElementById('btn-cancelar').style.display = 'block';
+            window.scrollTo(0,0);
         }
-    });
-</script>
+
+        function cancelarEdicao() {
+            document.getElementById('form-title').innerText = "Cadastrar Novo Produto";
+            document.getElementById('prod-id').value = "";
+            document.querySelectorAll('#area-admin input').forEach(i => i.value = "");
+            document.getElementById('btn-acao').innerText = "Salvar Produto";
+            document.getElementById('btn-cancelar').style.display = 'none';
+        }
+
+        async function deletarProduto(id) {
+            if (confirm("Tem certeza que deseja excluir?")) {
+                await _supabase.from('produtos').delete().eq('id', id);
+                listarProdutos();
+            }
+        }
+
+        function fazerLogout() { _supabase.auth.signOut(); location.reload(); }
+    </script>
 </body>
 </html>
