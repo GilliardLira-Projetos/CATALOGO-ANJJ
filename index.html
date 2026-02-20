@@ -243,6 +243,283 @@ async function processOrderFlow() {
     btn.innerText = "SINCRO. ESTOQUE...";
 
     try {
+        // Busca estoque atualizado diretamente do banco para evitar erros
+        const { data: serverProducts, error } = await _supabase.from('produtos').select('*');
+        if (error) throw error;
+
+        let changes = [];
+        for (let i = cart.length - 1; i >= 0; i--) {
+            const item = cart[i];
+            // Busca o item no banco usando os nomes de coluna com espaço (conforme seu banco)
+            const match = serverProducts.find(r => 
+                r.Name === item.name && 
+                (r.Tag || "").trim() === item.color && 
+                (r["Variant Name"] || "").trim() === item.size
+            );
+
+            const currentStock = match ? parseInt(match.Stock || 0) : 0;
+
+            if (currentStock <= 0) {
+                changes.push(`❌ ${item.name} esgotou.`); 
+                cart.splice(i, 1); 
+                isConfirmed = false;
+            } else if (currentStock < item.qty) {
+                changes.push(`⚠️ ${item.name} reduzido para ${currentStock}.`); 
+                item.qty = currentStock; 
+                isConfirmed = false;
+            }
+        }
+
+        if (changes.length > 0) {
+            updateCartUI(false);
+            alertBox.innerHTML = changes.join('<br>');
+            alertBox.style.display = "block";
+            btn.disabled = false; 
+            btn.innerText = "VERIFICAR NOVAMENTE";
+            return;
+        }
+
+        if (!isConfirmed) {
+            isConfirmed = true; 
+            btn.disabled = false; 
+            btn.innerText = "CONFIRMAR E ENVIAR"; 
+            btn.classList.add('btn-confirm');
+        } else {
+            // Agora chama a função que REALMENTE grava no banco
+            await sendFinalOrder(name, phone);
+        }
+    } catch (err) {
+        console.error("Erro na sincronização:", err);
+        alert("Erro ao conectar com o banco. Verifique sua conexão.");
+        btn.disabled = false;
+        btn.innerText = "FINALIZAR PEDIDO";
+    }
+}
+
+async function sendFinalOrder(n, p) {
+    const btn = document.getElementById('btnFinalize');
+    btn.disabled = true;
+    btn.innerText = "GRAVANDO PEDIDO...";
+    
+    const total = document.getElementById('totalFinal').innerText;
+    const list = cart.map(i => `${i.qty}x ${i.name} (${i.color}/${i.size})`).join(" | ");
+
+    try {
+        // 1. GRAVA NA TABELA 'pedidos' DO SUPABASE
+        const { error } = await _supabase
+            .from('pedidos')
+            .insert([{ 
+                "Name": n, 
+                "Phone": p, 
+                "Products": list, 
+                "Order Total": total, // Nome exato da coluna com espaço
+                "Status": "Pendente"
+            }]);
+
+        if (error) throw error;
+
+        // 2. SE GRAVOU COM SUCESSO, GERA O WHATSAPP
+        const waMsg = `*CATÁLOGO WEB - NOVO PEDIDO ANJJ*\n\n` +
+                      `*Cliente:* ${n}\n` +
+                      `*WhatsApp:* ${p}\n` +
+                      `--------------------------\n` +
+                      `*ITENS DO PEDIDO:*\n` +
+                      `${cart.map(i => `✅ ${i.qty}x ${i.name} - ${i.color}/${i.size}`).join('\n')}\n` +
+                      `--------------------------\n` +
+                      `*VALOR TOTAL:* ${total}\n\n` +
+                      `_Aguardo o envio da Chave Pix para efetuar o pagamento_`;
+
+        localStorage.removeItem('anjj_cart');
+        window.location.href = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(waMsg)}`;
+
+    } catch(err) { 
+        console.error("Erro ao salvar:", err);
+        alert("Erro ao salvar pedido no banco: " + err.message); 
+        btn.disabled = false; 
+        btn.innerText = "TENTAR NOVAMENTE";
+    }
+}
+
+async function init() {
+    const rows = await fetchData();
+    productsData = processData(rows);
+    renderCategories(); renderAll(); updateCartUI(false);
+}
+
+function renderCategories() {
+    const nav = document.getElementById("categoryNav");
+    const cats = [...new Set(productsData.map(p => p.category))];
+    nav.innerHTML = `<div class="cat-link active" onclick="filterCat('all', this)">Tudo</div>`;
+    cats.forEach(c => nav.innerHTML += `<div class="cat-link" onclick="filterCat('${c}', this)">${c}</div>`);
+}
+
+function renderAll() {
+    const catalog = document.getElementById("catalog"); catalog.innerHTML = "";
+    productsData.forEach((p, idx) => {
+        const catId = `sec-${p.category.replace(/\s+/g,'')}`;
+        let sec = document.getElementById(catId);
+        if(!sec) {
+            sec = document.createElement("section"); sec.className = "category-section"; sec.id = catId;
+            sec.innerHTML = `<h2 style="font-size:14px; border-left:3px solid var(--green); padding-left:8px; margin-bottom:10px;">${p.category}</h2><div class="grid"></div>`;
+            catalog.appendChild(sec);
+        }
+        sec.querySelector('.grid').appendChild(createCard(p, idx));
+    });
+}
+
+function createCard(p, idx) {
+    const d = document.createElement("div"); const id = "p-"+idx;
+    const isSoldOut = p.skus.reduce((a, b) => a + b.stock, 0) <= 0;
+    const hasDiscount = p.skus.some(s => s.oldPrice > 0);
+    d.className = `card ${isSoldOut ? 'sold-out' : ''} ${hasDiscount ? 'has-discount' : ''}`; d.id = id;
+    d.innerHTML = `
+        <div class="sold-out-badge">ESGOTADO</div>
+        <div class="discount-badge">OFERTA</div>
+        <div class="carousel-wrap" onclick="openZoom(this)">
+            <button class="nav-arrow nav-prev" onclick="moveSlide(this, -1)">&#10094;</button>
+            <button class="nav-arrow nav-next" onclick="moveSlide(this, 1)">&#10095;</button>
+            ${p.images.map((img, i) => `<img src="${img}" class="carousel-img ${i===0?'active':''}">`).join("")}
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+            <div><span class="old-price"></span><div class="current-price"></div></d<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SB_URL = "https://tjvscfmvhbhoirtasgae.supabase.co";
+const SB_KEY = "sb_publishable_fwcg-rT2Tvtyx5YnAMwBoA_ZL09xdQG";
+const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+const WHATSAPP_NUMBER = '5581997512217';
+
+const colorMap = {
+    'azul': 'blue', 'vermelho': 'red', 'verde': 'green', 'amarelo': 'yellow', 'preto': 'black',
+    'branco': 'white', 'cinza': 'gray', 'rosa': 'pink', 'laranja': 'orange', 'roxo': 'purple',
+    'marrom': 'brown', 'bege': 'beige', 'vinho': 'maroon', 'marinho': 'navy', 'dourado': 'gold',
+    'prata': 'silver', 'lilas': 'lavender', 'off white': '#faf9f6', 'caqui': '#c3b091'
+};
+
+function getHex(colorName) {
+    const c = colorName.toLowerCase().trim();
+    return colorMap[c] || c;
+}
+
+let productsData = [];
+let cart = JSON.parse(localStorage.getItem('anjj_cart')) || [];
+let isConfirmed = false;
+
+function formatBR(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
+
+async function fetchData() {
+    try {
+        const { data, error } = await _supabase
+            .from('produtos')
+            .select('*');
+
+        if (error) throw error;
+
+        // MAPEAMENTO CORRIGIDO (Lendo as Maiúsculas do Banco)
+        return data.map(p => ({
+            "Name": p.Name,               // N maiúsculo
+            "Price": p.Price,             // P maiúsculo
+            "Discounted Price": p.Price_Desconto || 0, 
+            "Category": p.Category,       // C maiúsculo
+            "Thumbnail": p.Thumbnail || p.Image1 || "", 
+            "Image1": p.Image1 || "",     // I maiúsculo
+            "Image2": p.Image2 || "",
+            "Image3": p.Image3 || "",
+            "Tag": p.Tag || "",           // T maiúsculo
+            "Variant Name": p.Variant_Name || "Único", 
+            "Stock": parseInt(p.Stock) || 0, // S maiúsculo (Quantidade)
+            "Availability": p.Availability || "show" // A maiúsculo
+        }));
+    } catch (err) {
+        console.error("Erro ao carregar banco:", err);
+        return [];
+    }
+}
+
+
+function processData(rows) {
+    const grouped = {};
+    rows.forEach(p => {
+        // Se a coluna disponibilidade não existir, vamos assumir que deve mostrar
+        const status = String(p.Availability).toLowerCase();
+        if (!p.Name || status === "hide") return;
+
+        const key = `${p.Name}_${p.Category}`;
+        if (!grouped[key]) {
+            grouped[key] = { 
+                name: p.Name, 
+                category: p.Category, 
+                images: [p.Thumbnail, p.Image1, p.Image2, p.Image3].filter(i => i && i !== ""), 
+                skus: [] 
+            };
+        }
+        
+        let finalPrice = parseFloat(p.Price) || 0;
+        grouped[key].skus.push({ 
+            color: String(p.Tag || "").trim(), 
+            size: String(p["Variant Name"] || "").trim(), 
+            price: finalPrice, 
+            oldPrice: null,
+            stock: parseInt(p.Stock || 99) // Se não tiver estoque definido, assume 99
+        });
+    });
+    return Object.values(grouped);
+}
+
+
+function processData(rows) {
+    const grouped = {};
+    rows.forEach(p => {
+        if (!p.Name || String(p.Availability).toLowerCase() !== "show") return;
+        const key = `${p.Name}_${p.Category}`;
+        if (!grouped[key]) grouped[key] = { name: p.Name, category: p.Category, images: [p.Thumbnail, p.Image1, p.Image2, p.Image3].filter(i => i), skus: [] };
+        
+        let rawPrice = parseFloat(p.Price) || 0;
+        let rawDisc = parseFloat(p["Discounted Price"]) || 0;
+        let finalPrice = rawPrice;
+        let oldPrice = (rawDisc > 0 && rawDisc < rawPrice) ? rawPrice : null;
+        if (oldPrice) finalPrice = rawDisc;
+
+        grouped[key].skus.push({ 
+            color: String(p["Tag"] || "").trim(), 
+            size: String(p["Variant Name"] || "").trim(), 
+            price: finalPrice, oldPrice: oldPrice,
+            stock: parseInt(p.Stock || 0) 
+        });
+    });
+    return Object.values(grouped);
+}
+
+// RESTANTE DAS FUNÇÕES IGUAIS AO SEU ORIGINAL PARA MANTER O VISUAL
+function moveSlide(btn, d) {
+    event.stopPropagation();
+    const wrap = btn.parentElement;
+    const imgs = wrap.querySelectorAll('.carousel-img');
+    let activeIdx = Array.from(imgs).findIndex(img => img.classList.contains('active'));
+    imgs[activeIdx].classList.remove('active');
+    let nextIdx = (activeIdx + d + imgs.length) % imgs.length;
+    imgs[nextIdx].classList.add('active');
+}
+
+function openZoom(wrap) {
+    const activeImg = wrap.querySelector('.carousel-img.active').src;
+    document.getElementById('modalImg').src = activeImg;
+    document.getElementById('imgModal').style.display = 'flex';
+}
+
+async function processOrderFlow() {
+    const name = document.getElementById('custName').value.trim();
+    const phone = document.getElementById('custPhone').value.trim();
+    const btn = document.getElementById('btnFinalize');
+    const alertBox = document.getElementById('stockAlertBox');
+
+    if(!name || phone.length < 8) return alert("Por favor, preencha Nome e WhatsApp.");
+    if(cart.length === 0) return alert("O carrinho está vazio.");
+
+    btn.disabled = true;
+    btn.innerText = "SINCRO. ESTOQUE...";
+
+    try {
         // Substitua o match atual por este:
 const match = serverProducts.find(r => {
     // Tenta ler o nome de várias formas possíveis (name, Name)
@@ -486,6 +763,7 @@ init();
 </div>
 </body>
 </html>
+
 
 
 
