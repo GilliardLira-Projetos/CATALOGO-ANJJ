@@ -83,22 +83,51 @@
         }
 
         async function listarProdutos() {
-            const { data, error } = await _supabase.from('produtos').select('*').order('created_at', { ascending: false });
-            if (error) return;
-            const tbody = document.getElementById('lista-produtos');
-            tbody.innerHTML = data.map(p => `
-                <tr>
-                    <td><img src="${p.Thumbnail || p.Image1}"></td>
-                    <td><b>${p.Name}</b><br>${p.Variant_Name} | ${p.Tag}</td>
-                    <td>R$ ${p.Price}</td>
-                    <td>${p.Stock}</td>
-                    <td>
-                        <button class="btn-edit" onclick="prepararEdicao('${p.id}')">✏️</button>
-                        <button class="btn-delete" onclick="deletarProduto('${p.id}')">🗑️</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
+    // Buscamos os produtos aumentando o limite para 1000 (evita sumir itens do CSV)
+    const { data, error } = await _supabase
+        .from('produtos')
+        .select('*')
+        .order('Name', { ascending: true })
+        .range(0, 999); 
+
+    if (error) {
+        console.error("Erro Supabase:", error);
+        return;
+    }
+
+    console.log("Produtos carregados:", data); // Verifique isso no F12 do navegador
+
+    const tbody = document.getElementById('lista-produtos');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='5' style='text-align:center'>Nenhum produto encontrado.</td></tr>";
+        return;
+    }
+
+    tbody.innerHTML = data.map(p => {
+        // PROTEÇÃO: Caso o CSV tenha nomes minúsculos, ele tenta ler ambos
+        const nome = p.Name || p.name || "Sem Nome";
+        const preco = p.Price || p.price || "0.00";
+        const estoque = p.Stock !== undefined ? p.Stock : (p.stock || 0);
+        const tamanho = p.Variant_Name || p.variant_name || "---";
+        const cor = p.Tag || p.tag || "---";
+        const foto = p.Thumbnail || p.thumbnail || p.Image1 || p.image1 || "https://via.placeholder.com/40";
+
+        return `
+            <tr>
+                <td><img src="${foto}"></td>
+                <td><b>${nome}</b><br>${tamanho} | ${cor}</td>
+                <td>R$ ${preco}</td>
+                <td>${estoque}</td>
+                <td>
+                    <button class="btn-edit" onclick="prepararEdicao('${p.id}')">✏️</button>
+                    <button class="btn-delete" onclick="deletarProduto('${p.id}')">🗑️</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
 
         async function salvarProduto() {
             const id = document.getElementById('prod-id').value;
@@ -167,3 +196,4 @@
     </script>
 </body>
 </html>
+
