@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+de<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8" />
@@ -131,31 +131,64 @@ let isConfirmed = false;
 function formatBR(val) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val); }
 
 async function fetchData() {
-    const { data, error } = await _supabase
-        .from('produtos')
-        .select('*');
+    try {
+        // Busca TODAS as colunas da sua tabela 'produtos'
+        const { data, error } = await _supabase
+            .from('produtos')
+            .select('*');
 
-    if (error) {
-        console.error("Erro ao buscar dados:", error);
+        if (error) throw error;
+
+        // MAPEAMENTO CORRIGIDO PARA O QUE VI NA SUA FOTO:
+        return data.map(p => ({
+            "Name": p.Name || "Sem Nome", // Usa 'Name' com N maiúsculo como está no banco
+            "Price": p.Price || 0,        // Usa 'Price' com P maiúsculo
+            "Discounted Price": p.preco_desconto || 0,
+            "Category": p.Category || "Geral", // Usa 'Category' com C maiúsculo
+            "Thumbnail": p.thumbnail || p.image1 || "", 
+            "Image1": p.image1 || "",
+            "Image2": p.image2 || "",
+            "Image3": p.image3 || "",
+            "Tag": p.tag || "",
+            "Variant Name": p.variant_name || "Único",
+            "Stock": p.estoque || 0,
+            "Availability": p.disponibilidade || "show" // Força "show" se estiver vazio
+        }));
+    } catch (err) {
+        console.error("Erro ao carregar banco:", err);
         return [];
     }
-    
-    // Mapeamento para garantir que as colunas do Supabase batam com o script
-    return data.map(p => ({
-        "Name": p.nome,
-        "Price": p.preco,
-        "Discounted Price": p.preco_desconto,
-        "Category": p.categoria,
-        "Thumbnail": p.thumbnail,
-        "Image1": p.image1,
-        "Image2": p.image2,
-        "Image3": p.image3,
-        "Tag": p.tag,
-        "Variant Name": p.variant_name,
-        "Stock": p.estoque,
-        "Availability": p.disponibilidade
-    }));
 }
+
+function processData(rows) {
+    const grouped = {};
+    rows.forEach(p => {
+        // Se a coluna disponibilidade não existir, vamos assumir que deve mostrar
+        const status = String(p.Availability).toLowerCase();
+        if (!p.Name || status === "hide") return;
+
+        const key = `${p.Name}_${p.Category}`;
+        if (!grouped[key]) {
+            grouped[key] = { 
+                name: p.Name, 
+                category: p.Category, 
+                images: [p.Thumbnail, p.Image1, p.Image2, p.Image3].filter(i => i && i !== ""), 
+                skus: [] 
+            };
+        }
+        
+        let finalPrice = parseFloat(p.Price) || 0;
+        grouped[key].skus.push({ 
+            color: String(p.Tag || "").trim(), 
+            size: String(p["Variant Name"] || "").trim(), 
+            price: finalPrice, 
+            oldPrice: null,
+            stock: parseInt(p.Stock || 99) // Se não tiver estoque definido, assume 99
+        });
+    });
+    return Object.values(grouped);
+}
+
 
 function processData(rows) {
     const grouped = {};
@@ -390,3 +423,4 @@ init();
 </div>
 </body>
 </html>
+
