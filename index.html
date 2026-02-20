@@ -242,41 +242,102 @@ async function processOrderFlow() {
     btn.disabled = true;
     btn.innerText = "SINCRO. ESTOQUE...";
 
-    const rawRows = await fetchData();
-    productsData = processData(rawRows);
+    try {
+        // Busca estoque atualizado diretamente do banco para evitar erros
+        const { data: serverProducts, error } = await _supabase.from('produtos').select('*');
+        if (error) throw error;
 
-    let changes = [];
-    for (let i = cart.length - 1; i >= 0; i--) {
-        const item = cart[i];
-        const match = rawRows.find(r => r.Name === item.name && String(r["Tag"]).trim() === item.color && String(r["Variant Name"]).trim() === item.size);
-        const currentStock = match ? parseInt(match.Stock || 0) : 0;
-        if (currentStock <= 0) {
-            changes.push(`❌ ${item.name} esgotou.`); cart.splice(i, 1); isConfirmed = false;
-        } else if (currentStock < item.qty) {
-            changes.push(`⚠️ ${item.name} reduzido para ${currentStock}.`); item.qty = currentStock; isConfirmed = false;
+        let changes = [];
+        for (let i = cart.length - 1; i >= 0; i--) {
+            const item = cart[i];
+            // Busca o item no banco usando os nomes de coluna com espaço (conforme seu banco)
+            const match = serverProducts.find(r => 
+                r.Name === item.name && 
+                (r.Tag || "").trim() === item.color && 
+                (r["Variant Name"] || "").trim() === item.size
+            );
+
+            const currentStock = match ? parseInt(match.Stock || 0) : 0;
+
+            if (currentStock <= 0) {
+                changes.push(`❌ ${item.name} esgotou.`); 
+                cart.splice(i, 1); 
+                isConfirmed = false;
+            } else if (currentStock < item.qty) {
+                changes.push(`⚠️ ${item.name} reduzido para ${currentStock}.`); 
+                item.qty = currentStock; 
+                isConfirmed = false;
+            }
         }
-    }
 
-    if (changes.length > 0) {
-        updateCartUI(false);
-        alertBox.innerHTML = changes.join('<br>');
-        alertBox.style.display = "block";
-        btn.disabled = false; btn.innerText = "VERIFICAR NOVAMENTE";
-        return;
-    }
+        if (changes.length > 0) {
+            updateCartUI(false);
+            alertBox.innerHTML = changes.join('<br>');
+            alertBox.style.display = "block";
+            btn.disabled = false; 
+            btn.innerText = "VERIFICAR NOVAMENTE";
+            return;
+        }
 
-    if (!isConfirmed) {
-        isConfirmed = true; btn.disabled = false; btn.innerText = "CONFIRMAR E ENVIAR"; btn.classList.add('btn-confirm');
-    } else {
-        sendFinalOrder(name, phone);
+        if (!isConfirmed) {
+            isConfirmed = true; 
+            btn.disabled = false; 
+            btn.innerText = "CONFIRMAR E ENVIAR"; 
+            btn.classList.add('btn-confirm');
+        } else {
+            // Agora chama a função que REALMENTE grava no banco
+            await sendFinalOrder(name, phone);
+        }
+    } catch (err) {
+        console.error("Erro na sincronização:", err);
+        alert("Erro ao conectar com o banco. Verifique sua conexão.");
+        btn.disabled = false;
+        btn.innerText = "FINALIZAR PEDIDO";
     }
 }
 
 async function sendFinalOrder(n, p) {
+    const btn = document.getElementById('btnFinalize');
+    btn.disabled = true;
+    btn.innerText = "GRAVANDO PEDIDO...";
+    
     const total = document.getElementById('totalFinal').innerText;
-    const waMsg = `*CATÁLOGO WEB - NOVO PEDIDO ANJJ*\n\n*Cliente:* ${n}\n*WhatsApp:* ${p}\n--------------------------\n*ITENS DO PEDIDO:*\n${cart.map(i => `✅ ${i.qty}x ${i.name} - ${i.color}/${i.size}`).join('\n')}\n--------------------------\n*VALOR TOTAL:* ${total}`;
-    localStorage.removeItem('anjj_cart');
-    window.location.href = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(waMsg)}`;
+    const list = cart.map(i => `${i.qty}x ${i.name} (${i.color}/${i.size})`).join(" | ");
+
+    try {
+        // 1. GRAVA NA TABELA 'pedidos' DO SUPABASE
+        const { error } = await _supabase
+            .from('pedidos')
+            .insert([{ 
+                "Name": n, 
+                "Phone": p, 
+                "Products": list, 
+                "Order Total": total, // Nome exato da coluna com espaço
+                "Status": "Pendente"
+            }]);
+
+        if (error) throw error;
+
+        // 2. SE GRAVOU COM SUCESSO, GERA O WHATSAPP
+        const waMsg = `*CATÁLOGO WEB - NOVO PEDIDO ANJJ*\n\n` +
+                      `*Cliente:* ${n}\n` +
+                      `*WhatsApp:* ${p}\n` +
+                      `--------------------------\n` +
+                      `*ITENS DO PEDIDO:*\n` +
+                      `${cart.map(i => `✅ ${i.qty}x ${i.name} - ${i.color}/${i.size}`).join('\n')}\n` +
+                      `--------------------------\n` +
+                      `*VALOR TOTAL:* ${total}\n\n` +
+                      `_Aguardo o envio da Chave Pix para efetuar o pagamento_`;
+
+        localStorage.removeItem('anjj_cart');
+        window.location.href = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(waMsg)}`;
+
+    } catch(err) { 
+        console.error("Erro ao salvar:", err);
+        alert("Erro ao salvar pedido no banco: " + err.message); 
+        btn.disabled = false; 
+        btn.innerText = "TENTAR NOVAMENTE";
+    }
 }
 
 async function init() {
@@ -423,6 +484,7 @@ init();
 </div>
 </body>
 </html>
+
 
 
 
