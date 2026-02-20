@@ -132,33 +132,33 @@ function formatBR(val) { return new Intl.NumberFormat('pt-BR', { style: 'currenc
 
 async function fetchData() {
     try {
-        // Busca TODAS as colunas da sua tabela 'produtos'
         const { data, error } = await _supabase
             .from('produtos')
             .select('*');
 
         if (error) throw error;
 
-        // MAPEAMENTO CORRIGIDO PARA O QUE VI NA SUA FOTO:
+        // MAPEAMENTO CORRIGIDO (Lendo as Maiúsculas do Banco)
         return data.map(p => ({
-            "Name": p.Name || "Sem Nome", // Usa 'Name' com N maiúsculo como está no banco
-            "Price": p.Price || 0,        // Usa 'Price' com P maiúsculo
-            "Discounted Price": p.preco_desconto || 0,
-            "Category": p.Category || "Geral", // Usa 'Category' com C maiúsculo
-            "Thumbnail": p.thumbnail || p.image1 || "", 
-            "Image1": p.image1 || "",
-            "Image2": p.image2 || "",
-            "Image3": p.image3 || "",
-            "Tag": p.tag || "",
-            "Variant Name": p.variant_name || "Único",
-            "Stock": p.estoque || 0,
-            "Availability": p.disponibilidade || "show" // Força "show" se estiver vazio
+            "Name": p.Name,               // N maiúsculo
+            "Price": p.Price,             // P maiúsculo
+            "Discounted Price": p.Price_Desconto || 0, 
+            "Category": p.Category,       // C maiúsculo
+            "Thumbnail": p.Thumbnail || p.Image1 || "", 
+            "Image1": p.Image1 || "",     // I maiúsculo
+            "Image2": p.Image2 || "",
+            "Image3": p.Image3 || "",
+            "Tag": p.Tag || "",           // T maiúsculo
+            "Variant Name": p.Variant_Name || "Único", 
+            "Stock": parseInt(p.Stock) || 0, // S maiúsculo (Quantidade)
+            "Availability": p.Availability || "show" // A maiúsculo
         }));
     } catch (err) {
         console.error("Erro ao carregar banco:", err);
         return [];
     }
 }
+
 
 function processData(rows) {
     const grouped = {};
@@ -423,4 +423,5 @@ init();
 </div>
 </body>
 </html>
+
 
