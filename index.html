@@ -142,16 +142,16 @@ async function fetchData() {
         return data.map(p => ({
             "Name": p.Name,               // N maiúsculo
             "Price": p.Price,             // P maiúsculo
-            "Discounted Price": p.Price_Desconto || 0, 
+            "Discounted Price": p.Price_Desconto ||, 
             "Category": p.Category,       // C maiúsculo
             "Thumbnail": p.Thumbnail || p.Image1 || "", 
             "Image1": p.Image1 || "",     // I maiúsculo
             "Image2": p.Image2 || "",
             "Image3": p.Image3 || "",
             "Tag": p.Tag || "",           // T maiúsculo
-            "Variant Name": p.Variant_Name || "Único", 
+            "Variant Name": p.Variant_Name || , 
             "Stock": parseInt(p.Stock) || 0, // S maiúsculo (Quantidade)
-            "Availability": p.Availability || "show" // A maiúsculo
+            "Availability": p.Availability ||  // A maiúsculo
         }));
     } catch (err) {
         console.error("Erro ao carregar banco:", err);
@@ -484,6 +484,7 @@ init();
 </div>
 </body>
 </html>
+
 
 
 
