@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Admin - LOJA ANJJ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --green: #16a34a; --bg: #f8fafc; --dark: #1e293b; }
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        
+        /* LOGIN BOX */
+        .login-container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; }
+        
+        /* ADMIN PANEL (Hidden by default) */
+        #adminPanel { display: none; width: 95%; max-width: 700px; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin: 20px; }
+        
+        h2 { color: var(--dark); margin-bottom: 20px; font-weight: 700; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: #64748b; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; font-family: 'Poppins'; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        
+        button { background: var(--dark); color: white; border: none; padding: 14px; width: 100%; border-radius: 8px; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 10px; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-save { background: var(--green); margin-top: 20px; }
+        .btn-logout { background: #ef4444; padding: 8px; font-size: 12px; width: auto; margin-top: 30px; }
+
+        #loadingStatus { font-size: 12px; color: var(--green); margin-top: 10px; display: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<div id="loginBox" class="login-container">
+    <div style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">ANJJ ADMIN</div>
+    <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">Aceda para gerir o catálogo</p>
+    <input type="email" id="email" placeholder="E-mail" style="margin-bottom: 10px;">
+    <input type="password" id="password" placeholder="Senha" style="margin-bottom: 20px;">
+    <button onclick="login()">ENTRAR NO SISTEMA</button>
+</div>
+
+<div id="adminPanel">
+    <h2>Cadastrar Novo Produto</h2>
+    <form id="productForm">
+        <div class="form-group">
+            <label>Nome da Peça</label>
+            <input type="text" id="Name" placeholder="Ex: Kimono Jiu Jitsu Limited Edition" required>
+        </div>
+
+        <div class="grid">
+            <div class="form-group">
+                <label>Categoria</label>
+                <input type="text" id="Category" placeholder="Ex: Jiu Jitsu" required>
+            </div>
+            <div class="form-group">
+                <label>Status no Site</label>
+                <select id="Availability">
+                    <option value="show">Visível</option>
+                    <option value="hide">Oculto</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="form-group">
+                <label>Preço (Ex: 350,00)</label>
+                <input type="text" id="Price" required>
+            </div>
+            <div class="form-group">
+                <label>Preço Oferta (Opcional)</label>
+                <input type="text" id="DiscountedPrice">
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="form-group">
+                <label>Tamanho</label>
+                <input type="text" id="VariantName" placeholder="Ex: A1, A2, P, M, G">
+            </div>
+            <div class="form-group">
+                <label>Cor / Tag</label>
+                <input type="text" id="Tag" placeholder="Ex: Azul, Branco, Preto">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Foto do Produto (Upload Automático)</label>
+            <input type="file" id="fileInput" accept="image/*" required>
+            <div id="loadingStatus">A carregar imagem...</div>
+        </div>
+
+        <button type="submit" class="btn-save" id="btnSalvar">PUBLICAR PRODUTO</button>
+    </form>
+
+    <button class="btn-logout" onclick="logout()">SAIR</button>
+</div>
+
+<script>
+    // CONFIGURAÇÃO SUPABASE (AS SUAS CHAVES)
+    const SB_URL = "https://tjvscfmvhbhoirtasgae.supabase.co";
+    const SB_KEY = "sb_publishable_fwcg-rT2Tvtyx5YnAMwBoA_ZL09xdQG";
+    const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+    // FUNÇÃO LOGIN
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const { error } = await _supabase.auth.signInWithPassword({ email, password });
+        if (error) alert("Acesso Negado: " + error.message);
+        else window.location.reload();
+    }
+
+    // VERIFICAR SESSÃO
+    async function checkUser() {
+        const { data: { user } } = await _supabase.auth.getUser();
+        if (user) {
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+            document.body.style.alignItems = 'flex-start';
+        }
+    }
+    checkUser();
+
+    // LOGOUT
+    async function logout() {
+        await _supabase.auth.signOut();
+        window.location.reload();
+    }
+
+    // CADASTRO COM UPLOAD
+    document.getElementById('productForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btnSalvar');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('loadingStatus');
+        
+        if (fileInput.files.length === 0) return alert("Selecione uma imagem!");
+
+        btn.disabled = true;
+        status.style.display = "block";
+        btn.innerText = "A PROCESSAR...";
+
+        try {
+            const file = fileInput.files[0];
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            // 1. Upload para o Storage
+            const { data: uploadData, error: uploadError } = await _supabase.storage
+                .from('fotos-produtos')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            // 2. Gerar URL Pública
+            const { data: urlData } = _supabase.storage
+                .from('fotos-produtos')
+                .getPublicUrl(filePath);
+            
+            const publicUrl = urlData.publicUrl;
+
+            // 3. Inserir na Tabela
+            const { error: dbError } = await _supabase.from('produtos').insert([{
+                "Name": document.getElementById('Name').value,
+                "Category": document.getElementById('Category').value,
+                "Price": document.getElementById('Price').value,
+                "Discounted Price": document.getElementById('DiscountedPrice').value,
+                "Variant Name": document.getElementById('VariantName').value,
+                "Tag": document.getElementById('Tag').value,
+                "Thumbnail": publicUrl,
+                "Availability": document.getElementById('Availability').value,
+                "Stock": "10"
+            }]);
+
+            if (dbError) throw dbError;
+
+            alert("Produto cadastrado com sucesso!");
+            location.reload();
+
+        } catch (err) {
+            alert("Erro: " + err.message);
+            btn.disabled = false;
+            btn.innerText = "PUBLICAR PRODUTO";
+            status.style.display = "none";
+        }
+    });
+</script>
+</body>
+</html>
