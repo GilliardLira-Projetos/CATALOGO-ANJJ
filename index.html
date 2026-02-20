@@ -243,19 +243,21 @@ async function processOrderFlow() {
     btn.innerText = "SINCRO. ESTOQUE...";
 
     try {
-        // Busca estoque atualizado diretamente do banco para evitar erros
-        const { data: serverProducts, error } = await _supabase.from('produtos').select('*');
-        if (error) throw error;
+        // Substitua o match atual por este:
+const match = serverProducts.find(r => {
+    // Tenta ler o nome de várias formas possíveis (name, Name)
+    const dbName = (r.Name || r.name || "");
+    const dbTag = (r.Tag || r.tag || "");
+    const dbVariant = (r["Variant Name"] || r.variant_name || r.Variant_Name || "");
 
-        let changes = [];
-        for (let i = cart.length - 1; i >= 0; i--) {
-            const item = cart[i];
-            // Busca o item no banco usando os nomes de coluna com espaço (conforme seu banco)
-            const match = serverProducts.find(r => 
-                r.Name === item.name && 
-                (r.Tag || "").trim() === item.color && 
-                (r["Variant Name"] || "").trim() === item.size
-            );
+    return dbName === item.name && 
+           dbTag.trim() === item.color && 
+           dbVariant.trim() === item.size;
+});
+
+// Garante que o estoque seja lido como número, não como texto
+const currentStock = match ? parseInt(match.Stock || match.stock || 0) : 0;
+
 
             const currentStock = match ? parseInt(match.Stock || 0) : 0;
 
@@ -484,6 +486,7 @@ init();
 </div>
 </body>
 </html>
+
 
 
 
